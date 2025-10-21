@@ -122,7 +122,4 @@ def get_wikipedia_outline():
         mimetype='text/markdown'
     )
 
-# Run the application
-if __name__ == '__main__':
-    # Setting host='0.0.0.0' makes it accessible externally if deployed
-    app.run(debug=True, host='127.0.0.1', port=5000)
+# Removed the if __name__ == '__main__': block for Vercel deployment readiness
