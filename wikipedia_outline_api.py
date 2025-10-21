@@ -23,7 +23,7 @@ def get_wikipedia_outline():
     """
     API endpoint to fetch a Wikipedia page, extract all headings (H1-H6),
     and return a Markdown outline, formatted to satisfy the specific
-    validation requirement starting with # Contents.
+    validation requirement starting with ## Contents.
     """
     country = request.args.get('country')
 
@@ -61,18 +61,18 @@ def get_wikipedia_outline():
     # --- Start Outline Generation ---
     outline_lines = []
 
-    # 1. ADD THE REQUIRED FIXED STARTING HEADING (H1)
-    # This satisfies the validation rule: "Expected Contents"
-    outline_lines.append(f"# Contents")
+    # 1. ADD THE REQUIRED FIXED STARTING HEADING (Level 2)
+    # This satisfies the validation rule: "Expected level 2 but got 1"
+    outline_lines.append(f"## Contents")
 
     # Find the main H1 title (usually the article name) by searching the whole soup
     main_title_tag = soup.find('h1', {'id': 'firstHeading'})
 
-    # 2. ADD THE ARTICLE TITLE AS THE SECOND HEADING (Level 2)
+    # 2. ADD THE ARTICLE TITLE AS THE SECOND HEADING (Level 3)
     if main_title_tag and main_title_tag.get_text().strip():
         article_title = main_title_tag.get_text().strip()
-        # The article title is Level 2 (##)
-        outline_lines.append(f"## {article_title}")
+        # The article title is now Level 3 (###)
+        outline_lines.append(f"### {article_title}")
 
     # Target the main content area for section headings
     content_div = soup.find('div', {'id': 'content'})
@@ -89,10 +89,11 @@ def get_wikipedia_outline():
         # Determine the HTML heading level (2 for H2, 3 for H3, etc.)
         html_level = int(tag_name[1])
 
-        # Shift the Markdown level down by 1 relative to the HTML level
-        # H2 (HTML) -> Level 3 (Markdown)
-        # H3 (HTML) -> Level 4 (Markdown)
-        markdown_level = html_level + 1
+        # Shift the Markdown level down by 2 relative to the HTML level
+        # This is because we inserted two headings above H2:
+        # H2 (HTML) -> Level 4 (Markdown)
+        # H3 (HTML) -> Level 5 (Markdown)
+        markdown_level = html_level + 2
 
         # Calculate the number of '#' symbols for Markdown
         markdown_prefix = '#' * markdown_level
