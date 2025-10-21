@@ -2,14 +2,14 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/wikipedia_outline_api.py",
+      "src": "wikipedia_outline_api.py",  // Path updated: Removed "api/"
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
-      "src": "/api/outline(.*)",
-      "dest": "api/wikipedia_outline_api.py"
+      "src": "/api/(.*)",
+      "dest": "wikipedia_outline_api.py" // Path updated: Removed "api/"
     }
   ]
 }
