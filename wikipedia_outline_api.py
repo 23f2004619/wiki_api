@@ -34,14 +34,11 @@ def get_wikipedia_outline():
         }), 400
 
     # 1. Construct the Wikipedia URL
-    # Quote the country name to handle spaces and special characters properly
-    # The URL for the English Wikipedia page for a country
     encoded_country = quote(country.replace(' ', '_'))
     wikipedia_url = f"https://en.wikipedia.org/wiki/{encoded_country}"
 
     try:
         # 2. Fetch Wikipedia Content
-        # Use a common User-Agent to avoid being blocked
         headers = {'User-Agent': 'WikipediaOutlineGenerator/1.0 (Contact: user@example.com)'}
         response = requests.get(wikipedia_url, headers=headers, timeout=10)
         response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
@@ -65,54 +62,58 @@ def get_wikipedia_outline():
     # Target the main content area (standard for Wikipedia articles)
     content_div = soup.find('div', {'id': 'content'})
     if not content_div:
-        # Fallback to the body content
+        # Fallback to body content
         content_div = soup.find('div', {'id': 'bodyContent'})
         if not content_div:
-             return jsonify({
+              return jsonify({
                 'error': "Could not find the main content block on the Wikipedia page."
-            }), 500
+              }), 500
 
-    # Find all heading tags (H1 to H6) within the content area
-    headings = content_div.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+    # Find the main H1 title (usually the article name)
+    main_title_tag = content_div.find('h1', {'id': 'firstHeading'})
+    outline_lines = []
 
-    outline_lines = ["## Contents\n"] # Start with the required '## Contents' line
-    
+    # Ensure the main title is the first Level 1 heading
+    if main_title_tag and main_title_tag.get_text().strip():
+        # Use only the article title for the Level 1 heading
+        article_title = main_title_tag.get_text().strip()
+        outline_lines.append(f"# {article_title}")
+        outline_lines.append(f"## Contents\n") # Add Contents line after the H1
+
+    # Find all subsequent heading tags (H2 to H6) within the content area
+    # Note: Wikipedia main sections start at H2
+    headings = content_div.find_all(['h2', 'h3', 'h4', 'h5', 'h6'])
+
     for tag in headings:
-        tag_name = tag.name  # e.g., 'h1', 'h2'
+        tag_name = tag.name  # e.g., 'h2', 'h3'
         
-        # Determine the heading level (1 for H1, 2 for H2, etc.)
-        level = int(tag_name[1]) 
+        # Determine the heading level (2 for H2, 3 for H3, etc.)
+        level = int(tag_name[1])
         
         # Calculate the number of '#' symbols for Markdown
-        # H1 = #, H2 = ##, etc.
         markdown_prefix = '#' * level
         
-        # Get text content and clean up
-        # 1. Get visible text (ignoring edit links/spans)
-        text = tag.get_text()
-        
-        # 2. Clean up common Wikipedia elements like the 'edit' link (usually a span inside H tags)
-        # We look for specific IDs/classes used in Wikipedia for cleanup
+        # 1. Clean up common Wikipedia elements like the 'edit' link
         edit_span = tag.find('span', class_='mw-editsection')
         if edit_span:
             edit_span.extract() # Remove the edit section before getting the text
             
-        # 3. Get the text again after cleanup and remove leading/trailing whitespace
+        # 2. Get the text and clean up
         heading_text = tag.get_text().strip()
         
-        # Skip empty headings or the site main heading (which is often already captured by the main h1)
-        if not heading_text or heading_text in ['Contents', 'Welcome to Wikipedia']:
-             continue
-
+        # Skip empty headings or known non-content headings
+        if not heading_text or heading_text in ['Contents', 'Welcome to Wikipedia', 'See also', 'References', 'External links']:
+              continue
+              
         # Format the line: ## Heading Text
         outline_lines.append(f"{markdown_prefix} {heading_text}")
 
     # Combine all lines into a single Markdown string
     markdown_outline = '\n'.join(outline_lines)
     
-    # If no headings were found other than the standard 'Contents'
+    # If not enough content headings were found
     if len(outline_lines) <= 1:
-         return jsonify({
+          return jsonify({
             'error': "Successfully fetched the page, but could not extract sufficient content headings."
         }), 404
 
@@ -121,5 +122,3 @@ def get_wikipedia_outline():
         markdown_outline,
         mimetype='text/markdown'
     )
-
-# Removed the if __name__ == '__main__': block for Vercel deployment readiness
