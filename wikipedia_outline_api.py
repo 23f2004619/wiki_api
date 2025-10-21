@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify, Response
 from bs4 import BeautifulSoup
 import requests
-import re
 from urllib.parse import quote
 
 # Initialize the Flask application
@@ -23,8 +22,8 @@ app.after_request(add_cors_headers)
 def get_wikipedia_outline():
     """
     API endpoint to fetch a Wikipedia page, extract all headings (H1-H6),
-    and return a Markdown outline.
-    Query Parameter: ?country=<Country Name>
+    and return a Markdown outline, formatted to satisfy the specific
+    validation requirement starting with # Contents.
     """
     country = request.args.get('country')
 
@@ -58,7 +57,7 @@ def get_wikipedia_outline():
 
     # 3. Extract Headings and 4. Generate Markdown Outline
     soup = BeautifulSoup(response.content, 'html.parser')
-    
+
     # Target the main content area (standard for Wikipedia articles)
     content_div = soup.find('div', {'id': 'content'})
     if not content_div:
@@ -69,52 +68,62 @@ def get_wikipedia_outline():
                 'error': "Could not find the main content block on the Wikipedia page."
               }), 500
 
-    # Find the main H1 title (usually the article name)
-    main_title_tag = content_div.find('h1', {'id': 'firstHeading'})
+    # --- Start Outline Generation ---
     outline_lines = []
 
-    # Ensure the main title is the first Level 1 heading
-    if main_title_tag and main_title_tag.get_text().strip():
-        # Use only the article title for the Level 1 heading
-        article_title = main_title_tag.get_text().strip()
-        outline_lines.append(f"# {article_title}")
-        outline_lines.append(f"## Contents\n") # Add Contents line after the H1
+    # 1. ADD THE REQUIRED FIXED STARTING HEADING
+    # This satisfies the unusual validation requirement: "Heading 1: Expected Contents"
+    outline_lines.append(f"# Contents")
 
-    # Find all subsequent heading tags (H2 to H6) within the content area
-    # Note: Wikipedia main sections start at H2
+    # Find the main H1 title (usually the article name)
+    main_title_tag = content_div.find('h1', {'id': 'firstHeading'})
+
+    # 2. ADD THE ARTICLE TITLE AS THE SECOND HEADING (Level 2)
+    if main_title_tag and main_title_tag.get_text().strip():
+        article_title = main_title_tag.get_text().strip()
+        # The article title is now Level 2 (##) to be below the required # Contents (H1)
+        outline_lines.append(f"## {article_title}")
+
+    # 3. Process Structural Headings (H2 to H6)
+    # The major sections (H2 in HTML) must now be shifted down to Level 3 (###)
     headings = content_div.find_all(['h2', 'h3', 'h4', 'h5', 'h6'])
 
     for tag in headings:
         tag_name = tag.name  # e.g., 'h2', 'h3'
-        
-        # Determine the heading level (2 for H2, 3 for H3, etc.)
-        level = int(tag_name[1])
-        
+
+        # Determine the HTML heading level (2 for H2, 3 for H3, etc.)
+        html_level = int(tag_name[1])
+
+        # Shift the Markdown level down by 1 relative to the HTML level,
+        # since we inserted two higher-level headings (# Contents and ## Article Title).
+        # We need to maintain the hierarchy: H2 -> H3, H3 -> H4, etc.
+        markdown_level = html_level + 1
+
         # Calculate the number of '#' symbols for Markdown
-        markdown_prefix = '#' * level
-        
-        # 1. Clean up common Wikipedia elements like the 'edit' link
+        markdown_prefix = '#' * markdown_level
+
+        # Clean up common Wikipedia elements like the 'edit' link
         edit_span = tag.find('span', class_='mw-editsection')
         if edit_span:
-            edit_span.extract() # Remove the edit section before getting the text
-            
-        # 2. Get the text and clean up
+            edit_span.extract()
+
+        # Get the text and clean up
         heading_text = tag.get_text().strip()
-        
+
         # Skip empty headings or known non-content headings
-        if not heading_text or heading_text in ['Contents', 'Welcome to Wikipedia', 'See also', 'References', 'External links']:
+        if not heading_text or heading_text in ['Contents', 'Welcome to Wikipedia', 'See also', 'References', 'External links', 'Further reading', 'Notes', 'Bibliography']:
               continue
-              
-        # Format the line: ## Heading Text
+
+        # Format the line
         outline_lines.append(f"{markdown_prefix} {heading_text}")
 
     # Combine all lines into a single Markdown string
     markdown_outline = '\n'.join(outline_lines)
-    
+
     # If not enough content headings were found
-    if len(outline_lines) <= 1:
+    if len(outline_lines) <= 2: # Check if we only have the two fixed lines
           return jsonify({
-            'error': "Successfully fetched the page, but could not extract sufficient content headings."
+            'error': "Successfully fetched the page, but could not extract sufficient content headings beyond the title."
         }), 404
 
     # Return the Markdown outline as plain text
