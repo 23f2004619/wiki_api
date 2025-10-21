@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/wikipedia_outline_api.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/outline(.*)",
+      "dest": "api/wikipedia_outline_api.py"
+    }
+  ]
+}
